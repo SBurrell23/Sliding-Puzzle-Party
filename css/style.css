@@ -389,7 +389,7 @@ a { color: var(--accent); }
 .tile-inner {
   position: absolute;
   inset: var(--gap);
-  border-radius: calc(var(--tile) * 0.09);
+  border-radius: calc(var(--tile) * 0.055);
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -620,33 +620,67 @@ a { color: var(--accent); }
 .res-moves { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; min-width: 72px; text-align: right; }
 .res-dnf { color: var(--muted); font-weight: 600; }
 
-/* ---------------------------------------------------------------- win overlay */
+/* ---------------------------------------------------------------- solo layout */
 
-.overlay-win {
-  position: fixed;
-  inset: 0;
+.solo-layout {
   display: grid;
-  place-items: center;
-  background: rgba(6, 8, 18, 0.78);
-  backdrop-filter: blur(4px);
-  z-index: 55;
-  padding: 20px;
+  grid-template-columns: minmax(216px, 268px) minmax(0, 1fr);
+  gap: 26px;
+  max-width: 1500px;
+  margin: 0 auto;
+  align-items: start;
 }
-.win-card {
+
+.session-record h3 { font-size: 0.95rem; margin-bottom: 12px; }
+.record-empty { color: var(--muted); font-size: 0.82rem; line-height: 1.5; margin: 0; }
+
+.record-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  /* Long sessions scroll rather than pushing the board off-screen. */
+  max-height: min(62vh, 560px);
+  overflow-y: auto;
+}
+.record-list li {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 32px 34px;
-  text-align: center;
-  box-shadow: var(--shadow);
-  animation: pop 0.4s ease;
-  max-width: 380px;
-  width: 100%;
+  border-radius: 11px;
+  padding: 9px 11px;
+  animation: recordIn 0.28s ease;
 }
-.win-card h2 { font-size: 2rem; margin-bottom: 8px; }
-.win-line { font-size: 1.15rem; margin: 0 0 6px; font-variant-numeric: tabular-nums; }
-.win-best { color: var(--warn); font-weight: 700; margin: 0 0 6px; }
-.win-card .row-actions { margin: 20px 0 12px; }
+.record-list li.best {
+  border-color: var(--warn);
+  background: linear-gradient(100deg, rgba(251, 191, 36, 0.12), var(--surface) 60%);
+}
+
+.record-index {
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.record-list li.best .record-index { color: var(--warn); }
+
+.record-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.record-label {
+  font-size: 0.8rem;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.record-moves { font-size: 0.72rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.record-time { font-size: 0.95rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.record-list li.best .record-time { color: var(--warn); }
+
+@keyframes recordIn { from { opacity: 0; transform: translateY(-6px); } }
 
 /* ---------------------------------------------------------------- audio panel */
 
@@ -790,8 +824,11 @@ input[type="range"]::-moz-range-thumb {
 /* ---------------------------------------------------------------- responsive */
 
 @media (max-width: 940px) {
-  .race-layout { grid-template-columns: minmax(0, 1fr); }
+  .race-layout,
+  .solo-layout { grid-template-columns: minmax(0, 1fr); }
   .race-rivals { order: 2; }
+  .session-record { order: 2; }
+  .record-list { max-height: none; }
   .rival-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
   .lobby-grid { grid-template-columns: minmax(0, 1fr); }
 }
@@ -806,5 +843,5 @@ input[type="range"]::-moz-range-thumb {
 
 @media (prefers-reduced-motion: reduce) {
   .logo-tiles b { animation: none; }
-  .win-card, .countdown span, .toast { animation: none; }
+  .countdown span, .toast, .record-list li { animation: none; }
 }

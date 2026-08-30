@@ -10,9 +10,15 @@
  *           into a snapshot that is fanned back out ~12 times a second.
  */
 
-import { Puzzle, BoardView, randomSeed, decodeTiles, mulberry32 } from './puzzle.js';
+import { Puzzle, BoardView, randomSeed, decodeTiles } from './puzzle.js';
 import { Net } from './net.js';
-import { prepareSquareImage, loadCatalog, catalogSize, creditFor } from './images.js';
+import {
+  prepareSquareImage,
+  prefetchImage,
+  randomPhotoIndex,
+  loadCatalog,
+  creditFor,
+} from './images.js';
 import { buildConfigUI } from './config-ui.js';
 import * as audio from './audio.js';
 import { sfx } from './audio.js';
@@ -23,6 +29,7 @@ import {
   adoptConfig,
   shareableConfig,
   PALETTES,
+  TILE_STYLES,
   getBest,
   recordBest,
 } from './settings.js';
@@ -45,7 +52,7 @@ function show(name) {
   window.scrollTo(0, 0);
 }
 
-function toast(text, kind = '') {
+function toast(text, kind = '', duration = 2600) {
   const node = document.createElement('div');
   node.className = `toast ${kind}`.trim();
   node.textContent = text;
@@ -53,7 +60,7 @@ function toast(text, kind = '') {
   setTimeout(() => {
     node.classList.add('out');
     setTimeout(() => node.remove(), 320);
-  }, 2600);
+  }, duration);
 }
 
 function formatTime(ms) {
@@ -166,10 +173,64 @@ const solo = {
   seed: 0,
   imageUrl: null,
   photo: null,
+  /** catalogue position of the picture currently on the board */
+  photoIndex: null,
+  /** catalogue position warmed up ahead of the next puzzle */
+  nextPhotoIndex: null,
   startedAt: 0,
   running: false,
   timer: null,
 };
+
+/* ------------------------------------------------------- session record */
+
+/** Solves completed since the last visit to the main menu. */
+const sessionRecord = [];
+
+function renderSessionRecord() {
+  const list = $('recordList');
+  list.textContent = '';
+  $('recordCount').textContent = String(sessionRecord.length);
+  $('recordEmpty').hidden = sessionRecord.length > 0;
+
+  // Newest first: the run you just finished is the one you want to read.
+  for (let i = sessionRecord.length - 1; i >= 0; i--) {
+    const entry = sessionRecord[i];
+    const item = document.createElement('li');
+    if (entry.best) item.classList.add('best');
+
+    const index = document.createElement('span');
+    index.className = 'record-index';
+    index.textContent = `#${i + 1}`;
+
+    const meta = document.createElement('span');
+    meta.className = 'record-meta';
+    const label = document.createElement('span');
+    label.className = 'record-label';
+    label.textContent = `${entry.size}×${entry.size} · ${TILE_STYLES[entry.tileStyle] || entry.tileStyle}`;
+    const moves = document.createElement('span');
+    moves.className = 'record-moves';
+    moves.textContent = entry.best ? `${entry.moves} moves · best` : `${entry.moves} moves`;
+    meta.append(label, moves);
+
+    const time = document.createElement('span');
+    time.className = 'record-time';
+    time.textContent = formatTime(entry.ms);
+
+    item.append(index, meta, time);
+    list.appendChild(item);
+  }
+}
+
+function addSessionRecord(entry) {
+  sessionRecord.push(entry);
+  renderSessionRecord();
+}
+
+function clearSessionRecord() {
+  sessionRecord.length = 0;
+  renderSessionRecord();
+}
 
 function soloBoardSettings() {
   return {
@@ -218,12 +279,53 @@ async function resolveImage(imageIndex) {
   return prepared;
 }
 
-async function startSolo({ reuseSeed = false } = {}) {
-  show('solo');
-  $('soloWin').hidden = true;
-  soloStopTimer();
+/** Warms up the picture that the next puzzle will use. */
+function queueNextPhoto() {
+  if (config.tileStyle !== 'photo') return;
+  loadCatalog().then(() => {
+    if (solo.nextPhotoIndex == null) solo.nextPhotoIndex = randomPhotoIndex();
+    prefetchImage(solo.nextPhotoIndex);
+  });
+}
 
+/** Blocks the start/restart controls while a picture is still downloading. */
+function setSoloBusy(busy) {
+  for (const id of ['startSolo', 'soloRestart', 'soloNew']) $(id).disabled = busy;
+  $('soloSetupStatus').textContent = busy ? 'Loading picture…' : '';
+  if (busy && currentScreen === 'solo') $('soloCaption').textContent = 'Loading picture…';
+}
+
+/**
+ * Starts a solo puzzle. The picture is resolved *before* the board is shown and
+ * the clock is started, so a photo puzzle never begins as numbered tiles and
+ * the timer never runs while an image is still downloading.
+ *
+ * @param {object}  options
+ * @param {boolean} options.reuseSeed   replay the same scramble
+ * @param {boolean} options.reusePhoto  keep the picture currently in play
+ */
+async function startSolo({ reuseSeed = false, reusePhoto = false } = {}) {
+  soloStopTimer();
   if (!reuseSeed) solo.seed = randomSeed();
+
+  if (config.tileStyle === 'photo') {
+    await loadCatalog();
+    if (!reusePhoto || solo.photoIndex == null) {
+      solo.photoIndex = solo.nextPhotoIndex ?? randomPhotoIndex();
+      solo.nextPhotoIndex = null;
+    }
+    setSoloBusy(true);
+    const prepared = await resolveImage(solo.photoIndex);
+    setSoloBusy(false);
+    solo.imageUrl = prepared.url;
+    solo.photo = prepared.photo;
+  } else {
+    solo.imageUrl = null;
+    solo.photo = null;
+    solo.photoIndex = null;
+  }
+
+  show('solo');
 
   if (!solo.view) {
     solo.view = new BoardView($('soloBoardHolder'), {
@@ -233,7 +335,6 @@ async function startSolo({ reuseSeed = false } = {}) {
     });
   }
 
-  // Numbers first so the board is playable immediately, then swap in the photo.
   solo.puzzle = new Puzzle(config.size, solo.seed);
   solo.view.attach(solo.puzzle);
   solo.view.configure(soloBoardSettings());
@@ -242,28 +343,16 @@ async function startSolo({ reuseSeed = false } = {}) {
 
   $('soloMoves').textContent = '0';
   $('soloTime').textContent = '0.0s';
-  $('soloCaption').textContent = '';
+  $('soloCaption').textContent = solo.photo ? creditFor(solo.photo) : '';
+  $('soloPeek').disabled = !solo.imageUrl;
   soloUpdateBest();
 
   solo.startedAt = performance.now();
   solo.running = true;
   solo.timer = setInterval(soloTick, 100);
 
-  if (!reuseSeed || (config.tileStyle === 'photo' && !solo.imageUrl)) {
-    const index = reuseSeed && solo.photo ? null : Math.floor(Math.random() * Math.max(1, catalogSize() || 1));
-    if (index !== null) {
-      const { url, photo } = await resolveImage(index);
-      solo.imageUrl = url;
-      solo.photo = photo;
-    }
-  }
-  if (config.tileStyle !== 'photo') {
-    solo.imageUrl = null;
-    solo.photo = null;
-  }
-  solo.view.configure(soloBoardSettings());
-  $('soloCaption').textContent = solo.photo ? creditFor(solo.photo) : '';
-  $('soloPeek').disabled = !solo.imageUrl;
+  // Get the following puzzle's picture ready while this one is being played.
+  queueNextPhoto();
 }
 
 function onSoloMove(count) {
@@ -274,21 +363,25 @@ function onSoloMove(count) {
 
 function finishSolo() {
   const elapsed = performance.now() - solo.startedAt;
+  const moves = solo.puzzle.moves;
   soloStopTimer();
   solo.view.setLocked(true);
   solo.view.flashSolved();
   $('soloTime').textContent = formatTime(elapsed);
   sfx.win();
 
-  const improved = recordBest(config.size, config.tileStyle, elapsed, solo.puzzle.moves);
+  const improved = recordBest(config.size, config.tileStyle, elapsed, moves);
   soloUpdateBest();
+  addSessionRecord({ size: config.size, tileStyle: config.tileStyle, ms: elapsed, moves, best: improved });
 
-  $('winTime').textContent = formatTime(elapsed);
-  $('winMoves').textContent = String(solo.puzzle.moves);
-  $('winBest').hidden = !improved;
-  setTimeout(() => {
-    $('soloWin').hidden = false;
-  }, 420);
+  // A toast rather than an overlay, so the finished picture stays in view.
+  toast(
+    improved
+      ? `Solved in ${formatTime(elapsed)} · ${moves} moves — new personal best!`
+      : `Solved in ${formatTime(elapsed)} · ${moves} moves`,
+    improved ? 'warn' : 'good',
+    4200
+  );
 }
 
 /* ========================================================================== */
@@ -316,6 +409,9 @@ const race = {
   announced: new Set(),
   /** edge length used for the rival mini-boards, set per round */
   rivalPx: RIVAL_BOARD_PX,
+  /** picture the next round will use; announced from the lobby so everyone
+   *  can download it before the countdown rather than during it */
+  nextImageIndex: null,
   /** host authority: peer id -> {tiles, moves, ms, place} */
   boards: new Map(),
   finishOrder: [],
@@ -381,6 +477,24 @@ function renderPlayers() {
   }
 }
 
+/**
+ * Host only: choose the next round's picture now and tell everyone, so each
+ * player downloads it while sitting in the lobby instead of at the whistle.
+ */
+function queueRacePhoto() {
+  if (!net.isHost) return;
+  if (config.tileStyle !== 'photo') {
+    race.nextImageIndex = null;
+    return;
+  }
+  loadCatalog().then(() => {
+    if (race.nextImageIndex == null) race.nextImageIndex = randomPhotoIndex();
+    if (race.nextImageIndex == null) return;
+    prefetchImage(race.nextImageIndex);
+    net.broadcast({ t: 'preload', imageIndex: race.nextImageIndex });
+  });
+}
+
 function enterLobby() {
   show('lobby');
   $('roomCode').textContent = net.code || '------';
@@ -392,6 +506,9 @@ function enterLobby() {
     lobbyConfigUI = buildConfigUI($('lobbyConfig'), (kind) => {
       if (kind === 'puzzle' && net.isHost) {
         net.broadcast({ t: 'config', config: shareableConfig() });
+        // A different tile style may mean a different picture is needed.
+        race.nextImageIndex = null;
+        queueRacePhoto();
       }
     });
   }
@@ -403,6 +520,8 @@ function enterLobby() {
     ? 'Share the code — the race starts when you say so.'
     : 'Connected. Waiting for the host.';
   $('lobbyStatus').className = 'status-line ok';
+
+  queueRacePhoto();
 }
 
 /* ------------------------------------------------------------- race setup */
@@ -544,20 +663,22 @@ async function beginRace({ seed, imageIndex, config: shared }) {
 
   rebuildRivals();
 
-  // Fetch the shared picture during the countdown so nobody waits on it.
-  const imagePromise = resolveImage(imageIndex);
+  // The lobby already told everyone which picture to download, so this normally
+  // resolves from cache. Dress the boards the moment it lands — usually before
+  // the countdown even finishes — and only then start the clock.
+  const imagePromise = resolveImage(imageIndex).then(({ url, photo }) => {
+    race.imageUrl = url;
+    race.photo = photo;
+    race.view.configure(raceBoardSettings());
+    for (const rival of race.rivals.values()) {
+      rival.view.configure({ ...raceBoardSettings(), highlightSettled: false, hoverMove: false, animate: false });
+    }
+    $('raceCaption').textContent = photo ? creditFor(photo) : '';
+    $('racePeek').disabled = !url;
+  });
 
   await runCountdown();
-
-  const { url, photo } = await imagePromise;
-  race.imageUrl = url;
-  race.photo = photo;
-  race.view.configure(raceBoardSettings());
-  for (const rival of race.rivals.values()) {
-    rival.view.configure({ ...raceBoardSettings(), highlightSettled: false, hoverMove: false, animate: false });
-  }
-  $('raceCaption').textContent = photo ? creditFor(photo) : '';
-  $('racePeek').disabled = !url;
+  await imagePromise;
 
   race.phase = 'racing';
   race.startedAt = performance.now();
@@ -877,6 +998,14 @@ function returnToLobby() {
   enterLobby();
 }
 
+/** Returns to the main menu, which is also what clears the session record. */
+function goHome() {
+  soloStopTimer();
+  clearSessionRecord();
+  if (net.peer) leaveRoom();
+  else show('home');
+}
+
 function leaveRoom(message) {
   stopUploads();
   stopSnapshots();
@@ -890,6 +1019,7 @@ function leaveRoom(message) {
   race.boards.clear();
   race.finishOrder = [];
   net.leave();
+  clearSessionRecord();
   show('home');
   if (message) toast(message, 'warn');
 }
@@ -913,6 +1043,9 @@ function wireNet() {
     sfx.join();
     if (net.isHost) {
       net.sendTo(player.id, { t: 'config', config: shareableConfig() });
+      if (race.nextImageIndex != null) {
+        net.sendTo(player.id, { t: 'preload', imageIndex: race.nextImageIndex });
+      }
       // A late arrival during a live round watches until the next one.
       if (race.phase === 'racing') net.sendTo(player.id, { t: 'spectate' });
     }
@@ -953,6 +1086,10 @@ function wireNet() {
       case 'config':
         adoptConfig(message.config);
         if (lobbyConfigUI) lobbyConfigUI.refresh();
+        break;
+      case 'preload':
+        // Download the next round's picture now so the race starts on time.
+        prefetchImage(message.imageIndex);
         break;
       case 'start':
         beginRace(message);
@@ -1002,19 +1139,36 @@ function wireUI() {
   for (const button of document.querySelectorAll('[data-home]')) {
     button.addEventListener('click', () => {
       sfx.click();
-      soloStopTimer();
-      if (net.peer) leaveRoom();
-      else show('home');
+      goHome();
     });
   }
 
   /* ---- home ---- */
-  $('goSolo').addEventListener('click', () => {
-    sfx.click();
-    if (!soloConfigUI) soloConfigUI = buildConfigUI($('soloConfig'), () => {});
+  const openSoloSetup = () => {
+    if (!soloConfigUI) {
+      soloConfigUI = buildConfigUI($('soloConfig'), (kind) => {
+        // Switching to photo tiles should start the download straight away.
+        if (kind === 'puzzle') queueNextPhoto();
+      });
+    }
     soloConfigUI.refresh();
     soloConfigUI.setEditable(true);
+    $('soloSetupStatus').textContent = '';
     show('solo-setup');
+    queueNextPhoto();
+  };
+
+  $('goSolo').addEventListener('click', () => {
+    sfx.click();
+    openSoloSetup();
+  });
+
+  // Reached from a game in progress: changing settings must not wipe the
+  // session record — only the main menu does that.
+  $('soloSetup').addEventListener('click', () => {
+    sfx.click();
+    soloStopTimer();
+    openSoloSetup();
   });
 
   $('goHost').addEventListener('click', () => {
@@ -1040,14 +1194,12 @@ function wireUI() {
   });
   $('soloRestart').addEventListener('click', () => {
     sfx.click();
-    startSolo({ reuseSeed: true });
+    startSolo({ reuseSeed: true, reusePhoto: true });
   });
   $('soloNew').addEventListener('click', () => {
     sfx.click();
     startSolo();
   });
-  $('winAgain').addEventListener('click', () => startSolo({ reuseSeed: true }));
-  $('winNew').addEventListener('click', () => startSolo());
   wirePeek('soloPeek', () => solo.view);
   wirePeek('racePeek', () => race.view);
 
@@ -1136,9 +1288,11 @@ function wireUI() {
     const payload = {
       t: 'start',
       seed: randomSeed(),
-      imageIndex: Math.floor(mulberry32(randomSeed())() * Math.max(1, catalogSize() || 1)),
+      // Use the picture everyone was told to preload in the lobby.
+      imageIndex: race.nextImageIndex ?? randomPhotoIndex() ?? 0,
       config: shareableConfig(),
     };
+    race.nextImageIndex = null;
     net.broadcast(payload);
     beginRace(payload);
   });
@@ -1182,6 +1336,7 @@ function boot() {
   setupAudioUnlock();
   wireUI();
   wireNet();
+  renderSessionRecord();
   loadCatalog();
 
   // An invite link drops the player straight onto the join screen.

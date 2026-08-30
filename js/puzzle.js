@@ -262,7 +262,7 @@ export class BoardView {
     const tile = this.pixels / this.size;
     this.el.style.setProperty('--bp', `${this.pixels}px`);
     this.el.style.setProperty('--tile', `${tile}px`);
-    this.el.style.setProperty('--gap', `${Math.max(1, Math.round(tile * 0.035))}px`);
+    this.el.style.setProperty('--gap', `${Math.max(1, Math.round(tile * 0.022))}px`);
   }
 
   /** Applies visual configuration; `imageUrl` may be null for non-photo modes. */

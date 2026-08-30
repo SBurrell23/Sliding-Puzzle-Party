@@ -87,6 +87,7 @@
     </header>
     <div id="soloConfig" class="config-host"></div>
     <button class="btn primary big wide" id="startSolo">Start Puzzle</button>
+    <p class="status-line center" id="soloSetupStatus"></p>
   </div>
 </section>
 
@@ -100,27 +101,25 @@
       <div class="stat"><span class="stat-label">Best</span><span class="stat-value" id="soloBest">&mdash;</span></div>
     </div>
     <div class="top-actions">
+      <button class="btn ghost small" id="soloSetup" title="Change puzzle settings without losing your session record">Setup</button>
       <button class="btn ghost small peek-btn" id="soloPeek" title="Hold to preview the finished picture">Preview</button>
       <button class="btn ghost small" id="soloRestart">Restart</button>
       <button class="btn small" id="soloNew">New</button>
     </div>
   </div>
 
-  <div class="board-stage">
-    <div class="board-holder" id="soloBoardHolder"></div>
-  </div>
-  <p class="board-caption" id="soloCaption"></p>
+  <div class="solo-layout">
+    <aside class="session-record">
+      <h3>This session <span class="count" id="recordCount">0</span></h3>
+      <p class="record-empty" id="recordEmpty">Solve a puzzle and it lands here. Cleared when you return to the main menu.</p>
+      <ol class="record-list" id="recordList"></ol>
+    </aside>
 
-  <div class="overlay-win" id="soloWin" hidden>
-    <div class="win-card">
-      <h2>Solved!</h2>
-      <p class="win-line"><span id="winTime">0.0s</span> &middot; <span id="winMoves">0</span> moves</p>
-      <p class="win-best" id="winBest" hidden>New personal best!</p>
-      <div class="row-actions center">
-        <button class="btn" id="winAgain">Same puzzle</button>
-        <button class="btn primary" id="winNew">New puzzle</button>
+    <div class="solo-main">
+      <div class="board-stage">
+        <div class="board-holder" id="soloBoardHolder"></div>
       </div>
-      <button class="btn ghost small" data-home>Main menu</button>
+      <p class="board-caption" id="soloCaption"></p>
     </div>
   </div>
 </section>

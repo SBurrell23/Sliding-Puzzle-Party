@@ -15,6 +15,11 @@ click is a couple of CSS custom-property writes, so the tile is simply *there*.
 Slide animation is an opt-in setting, off by default.
 
 - **Solo mode** with a timer, move counter, and personal bests per board size.
+- **Session record** down the left of the solo screen: every solve you complete,
+  newest first, with its time, move count, and a marker on personal bests.
+  Finishing shows a toast rather than a dialog, so the completed picture stays in
+  view. Use *Setup* to change puzzle settings without losing the record — only
+  returning to the main menu clears it.
 - **Multiplayer rooms** — host a room, share a six-character code (or an invite
   link), and race. Rival boards mirror live beside your own with names, move
   counts, progress bars, and finishing places.
@@ -26,6 +31,11 @@ Slide animation is an opt-in setting, off by default.
   colour blocks, across eight palettes.
 - **520 CC0 wildlife photographs** pulled from iNaturalist, centre-cropped in the
   browser and sliced across the board. Hold *Preview* to peek at the finished picture.
+- **Pictures arrive before the puzzle does.** Photos are prepared ahead of time
+  and cached by index: solo prefetches while you are on the setup screen, and in
+  multiplayer the host announces the next round's picture from the lobby so every
+  player has it downloaded before the countdown starts. The clock never runs while
+  an image is still loading.
 - **Move on hover** (off by default) — sweep the pointer to slide tiles instead
   of clicking. Also: push whole rows in one click, arrow-key play.
 - **Sound** — a looping soundtrack plus effects synthesised live with the Web
