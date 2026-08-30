@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sliding Puzzle Party</title>
+<meta name="description" content="A fast, competitive peer-to-peer sliding puzzle race. Play solo or battle friends in real time." />
+<link rel="icon" href="assets/favicon.svg" />
+<link rel="preconnect" href="https://inaturalist-open-data.s3.amazonaws.com" crossorigin />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ============================ Audio control (always available) ============================ -->
+<button id="audioBtn" class="audio-btn" title="Sound settings" aria-label="Sound settings">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M4 9v6h4l5 4V5L8 9H4z" />
+    <path class="wave w1" d="M16.5 8.5a5 5 0 0 1 0 7" />
+    <path class="wave w2" d="M19 6a8.5 8.5 0 0 1 0 12" />
+  </svg>
+</button>
+
+<div id="audioPanel" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-label="Sound settings">
+    <header class="modal-head">
+      <h2>Sound</h2>
+      <button class="icon-btn" data-close-modal aria-label="Close">&times;</button>
+    </header>
+
+    <div class="slider-row">
+      <label for="musicVol">Music</label>
+      <button class="mute-btn" id="musicMute" aria-label="Mute music">&#9834;</button>
+      <input type="range" id="musicVol" min="0" max="100" step="1" />
+      <output id="musicVolOut">40</output>
+    </div>
+
+    <div class="slider-row">
+      <label for="fxVol">Effects</label>
+      <button class="mute-btn" id="fxMute" aria-label="Mute effects">&#10033;</button>
+      <input type="range" id="fxVol" min="0" max="100" step="1" />
+      <output id="fxVolOut">70</output>
+    </div>
+
+    <p class="hint">The soundtrack loops while you play. Effects are synthesised live in your browser.</p>
+    <button class="btn ghost small" id="testFx">Test effects</button>
+  </div>
+</div>
+
+<!-- ============================ Home ============================ -->
+<section class="screen active" id="screen-home">
+  <div class="home-wrap">
+    <h1 class="logo">
+      <span class="logo-tiles" aria-hidden="true"><b>1</b><b>2</b><b>3</b><b></b></span>
+      Sliding Puzzle <span class="accent">Party</span>
+    </h1>
+    <p class="tagline">Slide fast. Slide first. Beat everyone in the room.</p>
+
+    <div class="home-actions">
+      <button class="btn primary big" id="goSolo">
+        <span class="btn-title">Play Solo</span>
+        <span class="btn-sub">Beat your own best time</span>
+      </button>
+      <button class="btn big" id="goHost">
+        <span class="btn-title">Host a Party</span>
+        <span class="btn-sub">Create a room &amp; invite friends</span>
+      </button>
+      <button class="btn big" id="goJoin">
+        <span class="btn-title">Join a Party</span>
+        <span class="btn-sub">Enter a room code</span>
+      </button>
+    </div>
+
+    <p class="credit">
+      Wildlife photos from <a href="https://www.inaturalist.org" target="_blank" rel="noopener">iNaturalist</a> (CC0)
+      &middot; peer-to-peer via <a href="https://peerjs.com" target="_blank" rel="noopener">PeerJS</a>
+    </p>
+  </div>
+</section>
+
+<!-- ============================ Solo setup ============================ -->
+<section class="screen" id="screen-solo-setup">
+  <div class="panel-wrap">
+    <header class="panel-head">
+      <button class="btn ghost small" data-home>&larr; Back</button>
+      <h2>Solo Puzzle</h2>
+      <span class="head-spacer"></span>
+    </header>
+    <div id="soloConfig" class="config-host"></div>
+    <button class="btn primary big wide" id="startSolo">Start Puzzle</button>
+  </div>
+</section>
+
+<!-- ============================ Solo game ============================ -->
+<section class="screen" id="screen-solo">
+  <div class="game-top">
+    <button class="btn ghost small" data-home>&larr; Quit</button>
+    <div class="stats">
+      <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="soloTime">0.0s</span></div>
+      <div class="stat"><span class="stat-label">Moves</span><span class="stat-value" id="soloMoves">0</span></div>
+      <div class="stat"><span class="stat-label">Best</span><span class="stat-value" id="soloBest">&mdash;</span></div>
+    </div>
+    <div class="top-actions">
+      <button class="btn ghost small peek-btn" id="soloPeek" title="Hold to preview the finished picture">Preview</button>
+      <button class="btn ghost small" id="soloRestart">Restart</button>
+      <button class="btn small" id="soloNew">New</button>
+    </div>
+  </div>
+
+  <div class="board-stage">
+    <div class="board-holder" id="soloBoardHolder"></div>
+  </div>
+  <p class="board-caption" id="soloCaption"></p>
+
+  <div class="overlay-win" id="soloWin" hidden>
+    <div class="win-card">
+      <h2>Solved!</h2>
+      <p class="win-line"><span id="winTime">0.0s</span> &middot; <span id="winMoves">0</span> moves</p>
+      <p class="win-best" id="winBest" hidden>New personal best!</p>
+      <div class="row-actions center">
+        <button class="btn" id="winAgain">Same puzzle</button>
+        <button class="btn primary" id="winNew">New puzzle</button>
+      </div>
+      <button class="btn ghost small" data-home>Main menu</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ Host setup ============================ -->
+<section class="screen" id="screen-host">
+  <div class="panel-wrap narrow">
+    <header class="panel-head">
+      <button class="btn ghost small" data-home>&larr; Back</button>
+      <h2>Host a Party</h2>
+      <span class="head-spacer"></span>
+    </header>
+
+    <label class="field">
+      <span class="field-label">Your name</span>
+      <input type="text" id="hostName" maxlength="14" placeholder="Host" autocomplete="off" />
+    </label>
+
+    <button class="btn primary big wide" id="doHost">Create Room</button>
+    <p class="status-line" id="hostStatus"></p>
+    <p class="hint">You will get a six-character room code to share. Everyone races the same puzzle at the same time.</p>
+  </div>
+</section>
+
+<!-- ============================ Join ============================ -->
+<section class="screen" id="screen-join">
+  <div class="panel-wrap narrow">
+    <header class="panel-head">
+      <button class="btn ghost small" data-home>&larr; Back</button>
+      <h2>Join a Party</h2>
+      <span class="head-spacer"></span>
+    </header>
+
+    <label class="field">
+      <span class="field-label">Your name</span>
+      <input type="text" id="joinName" maxlength="14" placeholder="Player" autocomplete="off" />
+    </label>
+
+    <label class="field">
+      <span class="field-label">Room code</span>
+      <input type="text" id="joinCode" maxlength="7" placeholder="ABC123" autocomplete="off" spellcheck="false" class="code-input" />
+    </label>
+
+    <button class="btn primary big wide" id="doJoin">Join Room</button>
+    <p class="status-line" id="joinStatus"></p>
+  </div>
+</section>
+
+<!-- ============================ Lobby ============================ -->
+<section class="screen" id="screen-lobby">
+  <div class="lobby-wrap">
+    <header class="panel-head">
+      <button class="btn ghost small" id="leaveLobby">&larr; Leave</button>
+      <h2>Lobby</h2>
+      <span class="head-spacer"></span>
+    </header>
+
+    <div class="room-code-card">
+      <span class="room-code-label">Room code</span>
+      <div class="room-code" id="roomCode">------</div>
+      <div class="row-actions center">
+        <button class="btn ghost small" id="copyCode">Copy code</button>
+        <button class="btn ghost small" id="copyLink">Copy invite link</button>
+      </div>
+      <p class="status-line" id="lobbyStatus"></p>
+    </div>
+
+    <div class="lobby-grid">
+      <div class="lobby-players">
+        <h3>Players <span class="count" id="playerCount">1</span></h3>
+        <ul class="player-list" id="playerList"></ul>
+      </div>
+      <div class="lobby-config">
+        <h3>Puzzle setup</h3>
+        <div id="lobbyConfig" class="config-host"></div>
+        <p class="hint" id="clientConfigHint" hidden>Only the host can change these settings.</p>
+      </div>
+    </div>
+
+    <button class="btn primary big wide" id="startRace">Start Race</button>
+    <p class="hint center" id="waitHint" hidden>Waiting for the host to start the race&hellip;</p>
+  </div>
+</section>
+
+<!-- ============================ Race ============================ -->
+<section class="screen" id="screen-race">
+  <div class="game-top">
+    <button class="btn ghost small" id="leaveRace">&larr; Leave</button>
+    <div class="stats">
+      <div class="stat"><span class="stat-label">Time</span><span class="stat-value" id="raceTime">0.0s</span></div>
+      <div class="stat"><span class="stat-label">Moves</span><span class="stat-value" id="raceMoves">0</span></div>
+      <div class="stat"><span class="stat-label">Place</span><span class="stat-value" id="racePlace">&mdash;</span></div>
+    </div>
+    <div class="top-actions">
+      <button class="btn ghost small peek-btn" id="racePeek" title="Hold to preview the finished picture">Preview</button>
+      <button class="btn small" id="endRound" hidden>End round</button>
+    </div>
+  </div>
+
+  <div class="race-layout">
+    <div class="race-main">
+      <div class="board-stage">
+        <div class="board-holder" id="raceBoardHolder"></div>
+      </div>
+      <p class="board-caption" id="raceCaption"></p>
+    </div>
+    <aside class="race-rivals">
+      <h3>Rivals <span class="count" id="rivalCount">0</span></h3>
+      <div class="rival-grid" id="rivalGrid"></div>
+    </aside>
+  </div>
+
+  <div class="countdown" id="countdown" hidden><span id="countdownNum">3</span></div>
+</section>
+
+<!-- ============================ Results ============================ -->
+<section class="screen" id="screen-results">
+  <div class="panel-wrap">
+    <header class="panel-head">
+      <span class="head-spacer"></span>
+      <h2>Final Standings</h2>
+      <span class="head-spacer"></span>
+    </header>
+    <ol class="results-list" id="resultsList"></ol>
+    <div class="row-actions center">
+      <button class="btn primary big" id="backToLobby">Back to Lobby</button>
+      <button class="btn ghost" data-home>Main menu</button>
+    </div>
+    <p class="hint center" id="resultsWait" hidden>Waiting for the host to return everyone to the lobby&hellip;</p>
+  </div>
+</section>
+
+<!-- ============================ Toasts ============================ -->
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<audio id="music" loop preload="auto" src="assets/music/theme.mp3"></audio>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
