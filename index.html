@@ -11,14 +11,84 @@
 </head>
 <body>
 
-<!-- ============================ Audio control (always available) ============================ -->
-<button id="audioBtn" class="audio-btn" title="Sound settings" aria-label="Sound settings">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M4 9v6h4l5 4V5L8 9H4z" />
-    <path class="wave w1" d="M16.5 8.5a5 5 0 0 1 0 7" />
-    <path class="wave w2" d="M19 6a8.5 8.5 0 0 1 0 12" />
-  </svg>
-</button>
+<!-- ============================ Corner controls (always available) ============================ -->
+<div class="corner-controls">
+  <button id="statsBtn" class="corner-btn" title="All-time stats" aria-label="All-time stats">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="3" y="13" width="4.4" height="8" rx="1.2" />
+      <rect x="9.8" y="8" width="4.4" height="13" rx="1.2" />
+      <rect x="16.6" y="3" width="4.4" height="18" rx="1.2" />
+    </svg>
+  </button>
+  <button id="audioBtn" class="corner-btn audio-btn" title="Sound settings" aria-label="Sound settings">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9v6h4l5 4V5L8 9H4z" />
+      <path class="wave w1" d="M16.5 8.5a5 5 0 0 1 0 7" />
+      <path class="wave w2" d="M19 6a8.5 8.5 0 0 1 0 12" />
+    </svg>
+  </button>
+</div>
+
+<div id="statsPanel" class="modal" hidden>
+  <div class="modal-card wide" role="dialog" aria-label="All-time stats">
+    <header class="modal-head">
+      <h2>All-time stats</h2>
+      <button class="icon-btn" data-close-modal aria-label="Close">&times;</button>
+    </header>
+
+    <p class="hint" id="statsEmpty">No puzzles finished yet. Solve one and your career starts here.</p>
+
+    <div id="statsBody" hidden>
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <span class="stat-cell-label">Puzzles completed</span>
+          <span class="stat-cell-value" id="statCompleted">0</span>
+          <span class="stat-cell-note" id="statCompletedNote"></span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-cell-label">Fastest ever</span>
+          <span class="stat-cell-value" id="statFastest">&mdash;</span>
+          <span class="stat-cell-note" id="statFastestNote"></span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-cell-label">Fewest moves</span>
+          <span class="stat-cell-value" id="statFewest">&mdash;</span>
+          <span class="stat-cell-note" id="statFewestNote"></span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-cell-label">Average time</span>
+          <span class="stat-cell-value" id="statAvgTime">&mdash;</span>
+          <span class="stat-cell-note" id="statTotalTime"></span>
+        </div>
+        <div class="stat-cell">
+          <span class="stat-cell-label">Average moves</span>
+          <span class="stat-cell-value" id="statAvgMoves">&mdash;</span>
+          <span class="stat-cell-note"></span>
+        </div>
+      </div>
+
+      <h3 class="stats-subhead">By puzzle</h3>
+      <div class="stat-table-wrap">
+        <table class="stat-table">
+          <thead>
+            <tr>
+              <th scope="col">Puzzle</th>
+              <th scope="col">Solved</th>
+              <th scope="col">Best</th>
+              <th scope="col">Fewest</th>
+              <th scope="col">Avg time</th>
+              <th scope="col">Avg moves</th>
+            </tr>
+          </thead>
+          <tbody id="statsRows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="hint">Kept in this browser only — clearing site data or switching device starts a fresh career.</p>
+    <button class="btn ghost small" id="resetStats">Reset stats</button>
+  </div>
+</div>
 
 <div id="audioPanel" class="modal" hidden>
   <div class="modal-card" role="dialog" aria-label="Sound settings">

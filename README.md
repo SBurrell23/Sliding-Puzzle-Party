@@ -15,6 +15,11 @@ click is a couple of CSS custom-property writes, so the tile is simply *there*.
 Slide animation is an opt-in setting, off by default.
 
 - **Solo mode** with a timer, move counter, and personal bests per board size.
+- **All-time stats**, from the chart button in the corner: puzzles completed,
+  fastest ever, fewest moves, average time and average moves, plus a per-puzzle
+  breakdown. Solo and multiplayer finishes both count. Kept in `localStorage`, so
+  it is per-browser and survives reloads but not a site-data wipe — there is a
+  two-tap reset in the panel if you want to start over deliberately.
 - **Session record** down the left of the solo screen: every solve you complete,
   newest first, with its time, move count, and a marker on personal bests.
   Finishing shows a toast rather than a dialog, so the completed picture stays in

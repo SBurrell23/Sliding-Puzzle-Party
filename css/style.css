@@ -162,6 +162,9 @@ a { color: var(--accent); }
 .btn.ghost { background: transparent; }
 .btn.ghost:hover { background: rgba(255, 255, 255, 0.06); }
 
+.btn.danger { color: var(--hot); border-color: var(--hot); }
+.btn.danger:hover { background: rgba(244, 114, 182, 0.12); border-color: var(--hot); }
+
 .btn.small { padding: 7px 13px; font-size: 0.84rem; border-radius: 10px; }
 .btn.big { padding: 16px 22px; font-size: 1.05rem; border-radius: var(--radius); }
 .btn.wide { width: 100%; }
@@ -355,8 +358,8 @@ a { color: var(--accent); }
   flex-wrap: wrap;
   max-width: 1500px;
   margin: 0 auto 16px;
-  /* Keep clear of the fixed sound button in the top-right corner. */
-  padding-right: 58px;
+  /* Keep clear of the fixed corner controls in the top-right. */
+  padding-right: 112px;
 }
 .stats { display: flex; gap: 10px; }
 .stat {
@@ -726,11 +729,17 @@ a { color: var(--accent); }
 
 /* ---------------------------------------------------------------- audio panel */
 
-.audio-btn {
+.corner-controls {
   position: fixed;
   top: 16px;
   right: 16px;
   z-index: 70;
+  display: flex;
+  gap: 8px;
+}
+
+.corner-btn {
+  position: relative;
   width: 46px;
   height: 46px;
   display: grid;
@@ -743,8 +752,8 @@ a { color: var(--accent); }
   cursor: pointer;
   transition: transform 0.14s ease, border-color 0.14s ease;
 }
-.audio-btn:hover { transform: scale(1.07); border-color: var(--accent); }
-.audio-btn svg { width: 24px; height: 24px; fill: currentColor; }
+.corner-btn:hover { transform: scale(1.07); border-color: var(--accent); }
+.corner-btn svg { width: 24px; height: 24px; fill: currentColor; }
 .audio-btn svg .wave { fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
 .audio-btn.muted svg .wave { display: none; }
 .audio-btn.muted::after {
@@ -767,6 +776,77 @@ a { color: var(--accent); }
   backdrop-filter: blur(4px);
   padding: 20px;
 }
+/* ---------------------------------------------------------------- stats panel */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.stat-cell {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.stat-cell-label {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+.stat-cell-value {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+.stat-cell-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stats-subhead { font-size: 0.85rem; color: var(--muted); margin-bottom: 10px; }
+
+/* The table is the one thing here that can outgrow a narrow phone. */
+.stat-table-wrap {
+  overflow-x: auto;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 18px;
+}
+.stat-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.stat-table th,
+.stat-table td {
+  padding: 8px 11px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.stat-table th:first-child,
+.stat-table td:first-child { text-align: left; font-weight: 650; }
+.stat-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 700;
+}
+.stat-table tbody tr + tr td { border-top: 1px solid var(--line); }
+
 .modal-card {
   width: 100%;
   max-width: 400px;
@@ -776,7 +856,10 @@ a { color: var(--accent); }
   padding: 22px 24px 24px;
   box-shadow: var(--shadow);
   animation: pop 0.28s ease;
+  max-height: 88dvh;
+  overflow-y: auto;
 }
+.modal-card.wide { max-width: 580px; }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .modal-head h2 { font-size: 1.2rem; }
 
@@ -877,8 +960,11 @@ input[type="range"]::-moz-range-thumb {
 
 @media (max-width: 560px) {
   .screen { padding: 18px 13px 34px; }
-  .audio-btn { width: 40px; height: 40px; top: 12px; right: 12px; }
-  .game-top { justify-content: center; }
+  .corner-controls { top: 12px; right: 12px; gap: 6px; }
+  .corner-btn { width: 40px; height: 40px; }
+  .corner-btn svg { width: 21px; height: 21px; }
+  .game-top { justify-content: center; padding-right: 0; padding-top: 44px; }
+  .stat-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
   .stat { min-width: 70px; padding: 6px 11px; }
   .cfg-row { flex-direction: column; align-items: flex-start; }
 }

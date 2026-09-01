@@ -31,7 +31,9 @@ import {
   activePalette,
   TILE_STYLES,
   getBest,
-  recordBest,
+  recordCompletion,
+  statsSummary,
+  resetStats,
 } from './settings.js';
 
 const $ = (id) => document.getElementById(id);
@@ -137,6 +139,116 @@ function setupAudioPanel() {
   });
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !panel.hidden) close();
+  });
+}
+
+/* ========================================================================== */
+/*  All-time stats panel                                                      */
+/* ========================================================================== */
+
+const puzzleLabel = (size, tileStyle) => `${size}×${size} · ${TILE_STYLES[tileStyle] || tileStyle}`;
+
+/** Rounds to whole minutes/hours for the "time spent sliding" note. */
+function formatSpan(ms) {
+  const minutes = Math.round(ms / 60000);
+  if (minutes < 1) return 'under a minute';
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+function renderStats() {
+  const summary = statsSummary();
+  $('statsEmpty').hidden = summary.completed > 0;
+  $('statsBody').hidden = summary.completed === 0;
+  if (!summary.completed) return;
+
+  $('statCompleted').textContent = String(summary.completed);
+  $('statCompletedNote').textContent = summary.raceCompleted
+    ? `${summary.raceCompleted} in races`
+    : 'all solo';
+
+  $('statFastest').textContent = summary.fastest ? formatTime(summary.fastest.bestMs) : '—';
+  $('statFastestNote').textContent = summary.fastest
+    ? puzzleLabel(summary.fastest.size, summary.fastest.tileStyle)
+    : '';
+
+  $('statFewest').textContent = summary.fewestMoves ? String(summary.fewestMoves.bestMoves) : '—';
+  $('statFewestNote').textContent = summary.fewestMoves
+    ? puzzleLabel(summary.fewestMoves.size, summary.fewestMoves.tileStyle)
+    : '';
+
+  $('statAvgTime').textContent = formatTime(summary.averageMs);
+  $('statTotalTime').textContent = `${formatSpan(summary.totalTimeMs)} total`;
+  $('statAvgMoves').textContent = summary.averageMoves == null ? '—' : summary.averageMoves.toFixed(1);
+
+  const body = $('statsRows');
+  body.textContent = '';
+  for (const row of summary.rows) {
+    const tr = document.createElement('tr');
+    const cells = [
+      puzzleLabel(row.size, row.tileStyle),
+      String(row.completed),
+      row.bestMs == null ? '—' : formatTime(row.bestMs),
+      row.bestMoves == null ? '—' : String(row.bestMoves),
+      formatTime(row.averageMs),
+      row.averageMoves.toFixed(1),
+    ];
+    for (const value of cells) {
+      const td = document.createElement('td');
+      td.textContent = value;
+      tr.appendChild(td);
+    }
+    body.appendChild(tr);
+  }
+}
+
+function setupStatsPanel() {
+  const panel = $('statsPanel');
+  const resetButton = $('resetStats');
+  let armed = false;
+
+  const disarm = () => {
+    armed = false;
+    resetButton.textContent = 'Reset stats';
+    resetButton.classList.remove('danger');
+  };
+
+  const close = () => {
+    panel.hidden = true;
+    disarm();
+  };
+
+  $('statsBtn').addEventListener('click', () => {
+    renderStats();
+    disarm();
+    panel.hidden = false;
+    sfx.click();
+  });
+
+  panel.addEventListener('click', (event) => {
+    if (event.target === panel || event.target.closest('[data-close-modal]')) close();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !panel.hidden) close();
+  });
+
+  // Two taps to wipe a career — no accidental one-click reset.
+  resetButton.addEventListener('click', () => {
+    if (!armed) {
+      armed = true;
+      resetButton.textContent = 'Tap again to erase everything';
+      resetButton.classList.add('danger');
+      sfx.blocked();
+      return;
+    }
+    resetStats();
+    disarm();
+    renderStats();
+    soloUpdateBest();
+    toast('All-time stats cleared.', 'warn');
+    sfx.toggle(false);
   });
 }
 
@@ -370,16 +482,22 @@ function finishSolo() {
   $('soloTime').textContent = formatTime(elapsed);
   sfx.win();
 
-  const improved = recordBest(config.size, config.tileStyle, elapsed, moves);
+  const { bestTime } = recordCompletion({
+    size: config.size,
+    tileStyle: config.tileStyle,
+    ms: elapsed,
+    moves,
+    mode: 'solo',
+  });
   soloUpdateBest();
-  addSessionRecord({ size: config.size, tileStyle: config.tileStyle, ms: elapsed, moves, best: improved });
+  addSessionRecord({ size: config.size, tileStyle: config.tileStyle, ms: elapsed, moves, best: bestTime });
 
   // A toast rather than an overlay, so the finished picture stays in view.
   toast(
-    improved
+    bestTime
       ? `Solved in ${formatTime(elapsed)} · ${moves} moves — new personal best!`
       : `Solved in ${formatTime(elapsed)} · ${moves} moves`,
-    improved ? 'warn' : 'good',
+    bestTime ? 'warn' : 'good',
     4200
   );
 }
@@ -742,6 +860,14 @@ function finishRace() {
   race.view.flashSolved();
   $('raceTime').textContent = formatTime(elapsed);
   sfx.win();
+
+  recordCompletion({
+    size: config.size,
+    tileStyle: config.tileStyle,
+    ms: elapsed,
+    moves: race.puzzle.moves,
+    mode: 'race',
+  });
 
   const payload = { ms: elapsed, moves: race.puzzle.moves, tiles: race.puzzle.encode() };
   if (net.isHost) {
@@ -1333,6 +1459,7 @@ function wireUI() {
 
 function boot() {
   setupAudioPanel();
+  setupStatsPanel();
   setupAudioUnlock();
   wireUI();
   wireNet();

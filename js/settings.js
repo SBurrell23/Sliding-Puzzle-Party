@@ -147,26 +147,187 @@ export function shareableConfig() {
   };
 }
 
-/* ------------------------------------------------------------------ bests */
+/* ------------------------------------------------------- lifetime stats */
 
-const bests = readJSON(BEST_KEY, {});
+/**
+ * Career stats, kept per (size, tile style) bucket plus running totals.
+ *
+ * Buckets matter because a "fastest ever" pooled across board sizes would
+ * always just be your quickest 3×3. Totals are accumulated as sums rather than
+ * stored averages, so the averages stay exact however many puzzles are added.
+ *
+ * This lives in localStorage, which is per-browser and can be cleared by the
+ * player or the browser itself. It is a scoreboard, not a safe.
+ */
+const STATS_KEY = 'spp.stats.v1';
 
-/** Personal best time (ms) for a given size + tile style, or null. */
-export function getBest(size, tileStyle) {
-  const entry = bests[`${size}:${tileStyle}`];
-  return entry?.ms ?? null;
+function emptyStats() {
+  return {
+    v: 1,
+    totals: { completed: 0, raceCompleted: 0, timeMs: 0, moves: 0 },
+    buckets: {},
+    firstAt: null,
+  };
 }
 
-/** Records a finish; returns true when it beat the previous best. */
-export function recordBest(size, tileStyle, ms, moves) {
-  const key = `${size}:${tileStyle}`;
-  const previous = bests[key];
-  if (previous && previous.ms <= ms) return false;
-  bests[key] = { ms, moves, at: Date.now() };
+/**
+ * Earlier builds only stored a best time per bucket. Fold whatever is there
+ * into the new shape so nobody's records disappear; each legacy entry counts
+ * as the single completion we can actually prove happened.
+ */
+function migrateLegacyBests() {
+  const legacy = readJSON(BEST_KEY, null);
+  if (!legacy || typeof legacy !== 'object') return null;
+
+  const stats = emptyStats();
+  let found = false;
+  for (const [key, entry] of Object.entries(legacy)) {
+    if (!entry || typeof entry.ms !== 'number') continue;
+    const moves = typeof entry.moves === 'number' ? entry.moves : 0;
+    stats.buckets[key] = {
+      completed: 1,
+      bestMs: entry.ms,
+      bestMoves: moves || null,
+      timeMs: entry.ms,
+      moves,
+      lastAt: entry.at || null,
+    };
+    stats.totals.completed += 1;
+    stats.totals.timeMs += entry.ms;
+    stats.totals.moves += moves;
+    stats.firstAt = stats.firstAt || entry.at || null;
+    found = true;
+  }
+  return found ? stats : null;
+}
+
+function loadStats() {
+  let stored = null;
   try {
-    localStorage.setItem(BEST_KEY, JSON.stringify(bests));
+    const raw = localStorage.getItem(STATS_KEY);
+    stored = raw ? JSON.parse(raw) : null;
+  } catch {
+    stored = null;
+  }
+  if (!stored || stored.v !== 1) stored = migrateLegacyBests() || emptyStats();
+
+  // Tolerate a partially written or hand-edited store.
+  stored.totals = { completed: 0, raceCompleted: 0, timeMs: 0, moves: 0, ...(stored.totals || {}) };
+  stored.buckets = stored.buckets && typeof stored.buckets === 'object' ? stored.buckets : {};
+  return stored;
+}
+
+let stats = loadStats();
+
+/** Write a freshly migrated store straight away, so the legacy key is read once. */
+function persistMigration() {
+  try {
+    if (!localStorage.getItem(STATS_KEY) && stats.totals.completed > 0) saveStats();
   } catch {
     /* ignore */
   }
-  return true;
+}
+
+function saveStats() {
+  try {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch {
+    /* private browsing or a full quota — stats simply won't persist */
+  }
+}
+
+persistMigration();
+
+const bucketKey = (size, tileStyle) => `${size}:${tileStyle}`;
+
+/** Personal best time (ms) for a given size + tile style, or null. */
+export function getBest(size, tileStyle) {
+  return stats.buckets[bucketKey(size, tileStyle)]?.bestMs ?? null;
+}
+
+/**
+ * Records one completed puzzle against the lifetime stats.
+ *
+ * @param {object} completion
+ * @param {number} completion.size
+ * @param {string} completion.tileStyle
+ * @param {number} completion.ms
+ * @param {number} completion.moves
+ * @param {'solo'|'race'} [completion.mode]
+ * @returns {{bestTime: boolean, bestMoves: boolean}} which records were broken
+ */
+export function recordCompletion({ size, tileStyle, ms, moves, mode = 'solo' }) {
+  const key = bucketKey(size, tileStyle);
+  const bucket =
+    stats.buckets[key] ||
+    (stats.buckets[key] = { completed: 0, bestMs: null, bestMoves: null, timeMs: 0, moves: 0, lastAt: null });
+
+  const bestTime = bucket.bestMs == null || ms < bucket.bestMs;
+  const bestMoves = bucket.bestMoves == null || moves < bucket.bestMoves;
+
+  bucket.completed += 1;
+  bucket.timeMs += ms;
+  bucket.moves += moves;
+  if (bestTime) bucket.bestMs = ms;
+  if (bestMoves) bucket.bestMoves = moves;
+  bucket.lastAt = Date.now();
+
+  stats.totals.completed += 1;
+  if (mode === 'race') stats.totals.raceCompleted += 1;
+  stats.totals.timeMs += ms;
+  stats.totals.moves += moves;
+  stats.firstAt = stats.firstAt || Date.now();
+
+  saveStats();
+  return { bestTime, bestMoves };
+}
+
+/** Headline numbers plus a per-puzzle breakdown, ready for display. */
+export function statsSummary() {
+  const { completed, raceCompleted, timeMs, moves } = stats.totals;
+
+  const rows = Object.entries(stats.buckets)
+    .filter(([, bucket]) => bucket.completed > 0)
+    .map(([key, bucket]) => {
+      const [size, tileStyle] = key.split(':');
+      return {
+        size: Number(size),
+        tileStyle,
+        completed: bucket.completed,
+        bestMs: bucket.bestMs,
+        bestMoves: bucket.bestMoves,
+        averageMs: bucket.timeMs / bucket.completed,
+        averageMoves: bucket.moves / bucket.completed,
+      };
+    })
+    .sort((a, b) => a.size - b.size || a.tileStyle.localeCompare(b.tileStyle));
+
+  const pickLowest = (field) =>
+    rows.reduce((best, row) => {
+      if (row[field] == null) return best;
+      return !best || row[field] < best[field] ? row : best;
+    }, null);
+
+  return {
+    completed,
+    raceCompleted,
+    totalTimeMs: timeMs,
+    averageMs: completed ? timeMs / completed : null,
+    averageMoves: completed ? moves / completed : null,
+    fastest: pickLowest('bestMs'),
+    fewestMoves: pickLowest('bestMoves'),
+    firstAt: stats.firstAt,
+    rows,
+  };
+}
+
+/** Wipes every lifetime stat. */
+export function resetStats() {
+  stats = emptyStats();
+  saveStats();
+  try {
+    localStorage.removeItem(BEST_KEY);
+  } catch {
+    /* ignore */
+  }
 }
