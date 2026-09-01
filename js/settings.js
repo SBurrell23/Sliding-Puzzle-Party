@@ -30,6 +30,9 @@ export const PALETTES = {
 
 export const SIZES = [3, 4, 5, 6, 7, 8];
 
+/** Palette key meaning "use the player's own two colours". */
+export const CUSTOM_PALETTE = 'custom';
+
 const DEFAULT_PREFS = {
   name: '',
   musicVolume: 0.4,
@@ -47,6 +50,9 @@ const DEFAULT_CONFIG = {
   size: 4,
   tileStyle: 'numbers',
   palette: 'aqua',
+  // Starting point for the custom gradient, used until the player picks their own.
+  customA: '#f472b6',
+  customB: '#38bdf8',
 };
 
 function readJSON(key, fallback) {
@@ -78,16 +84,67 @@ export function saveConfig() {
   }
 }
 
+/* ------------------------------------------------------- custom palette */
+
+/** Accepts `#rgb` / `#rrggbb` and returns a normalised `#rrggbb`, or null. */
+export function normalizeHex(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(text);
+  if (short) return `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}`.toLowerCase();
+  return /^#[0-9a-f]{6}$/i.test(text) ? text.toLowerCase() : null;
+}
+
+/** WCAG relative luminance, 0 (black) to 1 (white). */
+function luminance(hex) {
+  const channels = [1, 3, 5].map((offset) => {
+    const value = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+/**
+ * Picks tile-number ink that stays readable on an `a`→`b` gradient. The digit
+ * sits in the middle of the tile, so the midpoint of the two colours is what
+ * has to be contrasted against.
+ */
+export function inkFor(a, b) {
+  return (luminance(a) + luminance(b)) / 2 > 0.4 ? '#0a0f18' : '#f7faff';
+}
+
+/** The {name, a, b, ink} actually in force, resolving the custom option. */
+export function activePalette(source = config) {
+  if (source.palette === CUSTOM_PALETTE) {
+    const a = normalizeHex(source.customA) || DEFAULT_CONFIG.customA;
+    const b = normalizeHex(source.customB) || DEFAULT_CONFIG.customB;
+    return { name: 'Custom', a, b, ink: inkFor(a, b) };
+  }
+  return PALETTES[source.palette] || PALETTES[DEFAULT_CONFIG.palette];
+}
+
+/* ------------------------------------------------------------------ wire */
+
 /** Replace the local config with one received from the host. */
 export function adoptConfig(incoming) {
   config.size = SIZES.includes(incoming.size) ? incoming.size : DEFAULT_CONFIG.size;
   config.tileStyle = TILE_STYLES[incoming.tileStyle] ? incoming.tileStyle : DEFAULT_CONFIG.tileStyle;
-  config.palette = PALETTES[incoming.palette] ? incoming.palette : DEFAULT_CONFIG.palette;
+
+  const custom = incoming.palette === CUSTOM_PALETTE;
+  config.palette = custom || PALETTES[incoming.palette] ? incoming.palette : DEFAULT_CONFIG.palette;
+  config.customA = normalizeHex(incoming.customA) || config.customA || DEFAULT_CONFIG.customA;
+  config.customB = normalizeHex(incoming.customB) || config.customB || DEFAULT_CONFIG.customB;
 }
 
 /** The subset of config that is meaningful to send over the wire. */
 export function shareableConfig() {
-  return { size: config.size, tileStyle: config.tileStyle, palette: config.palette };
+  return {
+    size: config.size,
+    tileStyle: config.tileStyle,
+    palette: config.palette,
+    customA: config.customA,
+    customB: config.customB,
+  };
 }
 
 /* ------------------------------------------------------------------ bests */

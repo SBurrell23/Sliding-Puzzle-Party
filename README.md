@@ -28,7 +28,10 @@ Slide animation is an opt-in setting, off by default.
 - **Back to the lobby** after a round, so you can tweak settings and go again
   without re-sharing the code.
 - **Configurable puzzles** — 3×3 up to 8×8, numbered tiles, wildlife photos, or
-  colour blocks, across eight palettes.
+  colour blocks. Eight preset palettes, or pick **two colours of your own** to
+  fade between; the tile numbers automatically switch between dark and light ink
+  so they stay readable against whatever gradient you choose.
+- **Solved tiles glow green**, so you can see the picture assembling at a glance.
 - **520 CC0 wildlife photographs** pulled from iNaturalist, centre-cropped in the
   browser and sliced across the board. Hold *Preview* to peek at the finished picture.
 - **Pictures arrive before the puzzle does.** Photos are prepared ahead of time

@@ -8,7 +8,17 @@
  *   - "control" rows are personal input preferences and stay editable always.
  */
 
-import { config, prefs, saveConfig, savePrefs, PALETTES, SIZES, TILE_STYLES } from './settings.js';
+import {
+  config,
+  prefs,
+  saveConfig,
+  savePrefs,
+  normalizeHex,
+  PALETTES,
+  CUSTOM_PALETTE,
+  SIZES,
+  TILE_STYLES,
+} from './settings.js';
 import { sfx } from './audio.js';
 
 function makeRow(title, subtitle, group) {
@@ -82,15 +92,33 @@ function makeSwitch(getValue, setValue) {
   return { el: label, refresh: () => { input.checked = !!getValue(); } };
 }
 
-function makeSwatches(getValue, setValue) {
+/**
+ * Preset gradient swatches plus a custom option driven by two colour pickers.
+ *
+ * @param {() => string} getValue        current palette key
+ * @param {(key: string) => void} setValue
+ * @param {() => void} commit            called once an edit is settled, so the
+ *                                       host only broadcasts on release rather
+ *                                       than on every frame of a colour drag
+ */
+function makeSwatches(getValue, setValue, commit) {
   const wrap = document.createElement('div');
   wrap.className = 'swatches';
 
+  const buttons = [];
+  const customButton = document.createElement('button');
+  const inputA = document.createElement('input');
+  const inputB = document.createElement('input');
+
   const paint = () => {
     const current = getValue();
-    for (const button of wrap.children) {
-      button.classList.toggle('on', button.dataset.value === current);
-    }
+    for (const button of buttons) button.classList.toggle('on', button.dataset.value === current);
+    customButton.classList.toggle('on', current === CUSTOM_PALETTE);
+    const a = normalizeHex(config.customA) || '#f472b6';
+    const b = normalizeHex(config.customB) || '#38bdf8';
+    customButton.style.background = `linear-gradient(150deg, ${a}, ${b})`;
+    inputA.value = a;
+    inputB.value = b;
   };
 
   for (const [key, palette] of Object.entries(PALETTES)) {
@@ -104,13 +132,63 @@ function makeSwatches(getValue, setValue) {
     button.addEventListener('click', () => {
       setValue(key);
       paint();
+      commit();
       sfx.click();
     });
+    buttons.push(button);
     wrap.appendChild(button);
   }
 
+  customButton.type = 'button';
+  customButton.className = 'swatch custom-swatch';
+  customButton.dataset.value = CUSTOM_PALETTE;
+  customButton.title = 'Your own two colours';
+  customButton.setAttribute('aria-label', 'Custom colours');
+  customButton.addEventListener('click', () => {
+    setValue(CUSTOM_PALETTE);
+    paint();
+    commit();
+    sfx.click();
+  });
+  wrap.appendChild(customButton);
+
+  const pair = document.createElement('div');
+  pair.className = 'custom-pair';
+
+  for (const [input, key, label] of [
+    [inputA, 'customA', 'First custom colour'],
+    [inputB, 'customB', 'Second custom colour'],
+  ]) {
+    input.type = 'color';
+    input.className = 'color-input';
+    input.title = label;
+    input.setAttribute('aria-label', label);
+
+    // `input` fires continuously while dragging: update locally only.
+    input.addEventListener('input', () => {
+      config[key] = normalizeHex(input.value) || config[key];
+      setValue(CUSTOM_PALETTE);
+      saveConfig();
+      paint();
+    });
+    // `change` fires once the value settles: safe to broadcast from here.
+    input.addEventListener('change', () => {
+      config[key] = normalizeHex(input.value) || config[key];
+      setValue(CUSTOM_PALETTE);
+      paint();
+      commit();
+      sfx.click();
+    });
+
+    pair.appendChild(input);
+  }
+
+  const group = document.createElement('div');
+  group.className = 'swatch-group';
+  group.append(wrap, pair);
+
   paint();
-  return { el: wrap, refresh: paint };
+  return { el: group, refresh: paint };
 }
 
 /**
@@ -165,12 +243,14 @@ export function buildConfigUI(container, onChange = () => {}) {
 
   const paletteRow = add(
     'Tile colour',
-    'Used by numbered and colour-block tiles.',
+    'Presets, or pick two colours of your own to fade between.',
     'puzzle',
     makeSwatches(
       () => config.palette,
       (value) => {
         config.palette = value;
+      },
+      () => {
         saveConfig();
         onChange('puzzle');
       }

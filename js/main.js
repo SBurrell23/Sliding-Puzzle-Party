@@ -28,7 +28,7 @@ import {
   savePrefs,
   adoptConfig,
   shareableConfig,
-  PALETTES,
+  activePalette,
   TILE_STYLES,
   getBest,
   recordBest,
@@ -240,7 +240,7 @@ function soloBoardSettings() {
     highlightSettled: prefs.highlightSettled,
     showNumbers: config.tileStyle !== 'photo' || prefs.showNumbersOnPhoto,
     tileStyle: config.tileStyle,
-    palette: PALETTES[config.palette],
+    palette: activePalette(),
     imageUrl: solo.imageUrl,
   };
 }
@@ -436,7 +436,7 @@ function raceBoardSettings() {
     highlightSettled: prefs.highlightSettled,
     showNumbers: config.tileStyle !== 'photo' || prefs.showNumbersOnPhoto,
     tileStyle: config.tileStyle,
-    palette: PALETTES[config.palette],
+    palette: activePalette(),
     imageUrl: race.imageUrl,
   };
 }
